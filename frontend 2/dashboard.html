@@ -1,0 +1,145 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Talk To Learn - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container" style="width:520px;">
+    <h3>Welcome, <span id="user"></span></h3>
+
+    <select id="subject">
+        <option value="">Select Subject</option>
+        <option value="Maths">Maths</option>
+        <option value="CPS">CPS</option>
+    </select>
+
+    <input type="file" id="pdfFile" accept="application/pdf">
+
+    <button onclick="explainText()">Explain PDF as Text</button>
+    <button onclick="explainVoice()">Explain PDF as Voice</button>
+    <button onclick="pauseVoice()">Pause Voice</button>
+
+    <h4>Explanation Output</h4>
+    <textarea id="output"></textarea>
+
+    <button onclick="askDoubt()">Ask Doubt (Voice)</button>
+
+    <h4>Your Doubt</h4>
+    <p id="doubtText"></p>
+
+    <h4>Doubt Explanation</h4>
+    <textarea id="doubtAnswer"></textarea>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+<script>
+let pdfTextGlobal = "";
+document.getElementById("user").innerText =
+    localStorage.getItem("username");
+
+// ---------------- PDF TEXT EXTRACTION ----------------
+
+   async function getPDFText() {
+    let file = document.getElementById("pdfFile").files[0];
+    if (!file) {
+        alert("Please upload a PDF");
+        return "";
+    }
+
+    let reader = new FileReader();
+    reader.readAsArrayBuffer(file);
+
+    return new Promise(resolve => {
+        reader.onload = async function () {
+            let pdf = await pdfjsLib.getDocument(reader.result).promise;
+            let text = "";
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                let page = await pdf.getPage(i);
+                let content = await page.getTextContent();
+                content.items.forEach(item => {
+                    text += item.str + " ";
+                });
+            }
+
+            pdfTextGlobal = text;  // ⭐ STORE PDF TEXT
+            resolve(text);
+        };
+    });
+}
+// ---------------- TEXT EXPLANATION ----------------
+async function explainText() {
+    let text = await getPDFText();
+    let subject = document.getElementById("subject").value;
+
+    document.getElementById("output").value =
+        "Subject: " + subject + "\n\n" + text;
+}
+
+// ---------------- VOICE EXPLANATION ----------------
+let speech;
+async function explainVoice() {
+    let text = await getPDFText();
+    speech = new SpeechSynthesisUtterance(text);
+    speech.lang = "en-US";
+    window.speechSynthesis.speak(speech);
+}
+
+// ---------------- PAUSE ----------------
+function pauseVoice() {
+    window.speechSynthesis.pause();
+}
+
+// ---------------- ASK DOUBT (VOICE → TEXT → EXPLANATION) ----------------
+function askDoubt() {
+    let recognition = new (window.SpeechRecognition ||
+        window.webkitSpeechRecognition)();
+
+    recognition.lang = "en-US";
+
+    recognition.onresult = function (event) {
+        let doubt = event.results[0][0].transcript.toLowerCase();
+
+        document.getElementById("doubtText").innerText = doubt;
+
+        let explanation = explainFromPDF(doubt);
+
+        document.getElementById("doubtAnswer").value = explanation;
+
+        let speak = new SpeechSynthesisUtterance(explanation);
+        speak.lang = "en-US";
+        window.speechSynthesis.speak(speak);
+    };
+
+    recognition.start();
+}
+function explainFromPDF(doubt) {
+    if (pdfTextGlobal === "") {
+        return "Please explain the PDF first so I can answer your doubt.";
+    }
+
+    let lines = pdfTextGlobal.split(".");
+    let result = "";
+
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase().includes("program 1")) {
+            result += lines[i] + ". ";
+        }
+    }
+
+    if (result === "") {
+        return "I could not find this topic in the uploaded PDF.";
+    }
+
+    return "Explanation based on your PDF:\n\n" + result;
+}
+
+</script>
+
+</body>
+</html>
